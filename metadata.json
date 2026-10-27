@@ -1,0 +1,6 @@
+{
+  "name": "SocialSphere",
+  "description": "A Facebook-style social media web application with real-time news feed, user profiles, posts, comments, likes, and friend connections powered by Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

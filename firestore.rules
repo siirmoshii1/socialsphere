@@ -1,0 +1,131 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Entity validation helpers
+    function isValidUser(data) {
+      return data.keys().hasAll(['displayName', 'createdAt']) &&
+        data.keys().hasOnly(['displayName', 'photoURL', 'bio', 'createdAt', 'updatedAt']) &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+        (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000)) &&
+        (!('bio' in data) || (data.bio is string && data.bio.size() <= 500));
+    }
+
+    function isValidPost(data) {
+      return data.keys().hasAll(['authorId', 'authorName', 'content', 'likesCount', 'createdAt']) &&
+        data.keys().hasOnly(['authorId', 'authorName', 'authorPic', 'content', 'mediaUrl', 'likesCount', 'createdAt', 'updatedAt']) &&
+        data.authorId is string && isValidId(data.authorId) && data.authorId == request.auth.uid &&
+        data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 80 &&
+        (!('authorPic' in data) || (data.authorPic is string && data.authorPic.size() <= 1000)) &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 2000 &&
+        (!('mediaUrl' in data) || (data.mediaUrl is string && data.mediaUrl.size() <= 1000)) &&
+        data.likesCount is number && data.likesCount >= 0;
+    }
+
+    function isValidComment(data) {
+      return data.keys().hasAll(['authorId', 'authorName', 'content', 'createdAt']) &&
+        data.keys().hasOnly(['authorId', 'authorName', 'authorPic', 'content', 'createdAt', 'updatedAt']) &&
+        data.authorId is string && isValidId(data.authorId) && data.authorId == request.auth.uid &&
+        data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 80 &&
+        (!('authorPic' in data) || (data.authorPic is string && data.authorPic.size() <= 1000)) &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 1000;
+    }
+
+    function isValidLike(data) {
+      return data.keys().hasAll(['userId', 'createdAt']) &&
+        data.keys().hasOnly(['userId', 'createdAt']) &&
+        data.userId is string && isValidId(data.userId) && data.userId == request.auth.uid;
+    }
+
+    function isValidFriend(data) {
+      return data.keys().hasAll(['friendId', 'displayName', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['friendId', 'displayName', 'photoURL', 'status', 'createdAt']) &&
+        data.friendId is string && isValidId(data.friendId) &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+        (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000)) &&
+        (data.status == 'pending' || data.status == 'accepted');
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming()) && incoming().createdAt == request.time;
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUser(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'updatedAt']) &&
+        incoming().createdAt == existing().createdAt;
+      allow delete: if isOwner(userId);
+
+      // Friends subcollection
+      match /friends/{friendId} {
+        allow read: if isSignedIn();
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(friendId) && isValidFriend(incoming());
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(friendId) && isValidFriend(incoming()) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'photoURL', 'displayName']);
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(friendId);
+      }
+    }
+
+    // Posts
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(postId) && isValidPost(incoming()) && incoming().createdAt == request.time;
+      allow update: if isSignedIn() && isValidId(postId) && (
+        // Action 1: Author modifies content/media
+        (existing().authorId == request.auth.uid && isValidPost(incoming()) &&
+         incoming().authorId == existing().authorId &&
+         incoming().createdAt == existing().createdAt &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['content', 'mediaUrl', 'updatedAt'])) ||
+        // Action 2: Anyone liking or unliking alters likesCount by +1 or -1
+        (incoming().diff(existing()).affectedKeys().hasOnly(['likesCount']) &&
+         incoming().likesCount is number && incoming().likesCount >= 0 &&
+         (incoming().likesCount == existing().likesCount + 1 || incoming().likesCount == existing().likesCount - 1))
+      );
+      allow delete: if isSignedIn() && isValidId(postId) && existing().authorId == request.auth.uid;
+
+      // Post comments
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(postId) && isValidId(commentId) && isValidComment(incoming()) && incoming().createdAt == request.time;
+        allow update: if isSignedIn() && isValidId(postId) && isValidId(commentId) &&
+          existing().authorId == request.auth.uid && isValidComment(incoming()) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['content', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(postId) && isValidId(commentId) &&
+          (existing().authorId == request.auth.uid || get(/databases/$(database)/documents/posts/$(postId)).data.authorId == request.auth.uid);
+      }
+
+      // Post likes subcollection
+      match /likes/{userId} {
+        allow read: if isSignedIn();
+        allow create: if isOwner(userId) && isValidId(postId) && isValidId(userId) && isValidLike(incoming()) && incoming().createdAt == request.time;
+        allow delete: if isOwner(userId) && isValidId(postId) && isValidId(userId);
+      }
+    }
+  }
+}

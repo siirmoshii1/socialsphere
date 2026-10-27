@@ -1,0 +1,189 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "User display name"
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Avatar image URL"
+        },
+        "bio": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "User profile bio"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when profile was created"
+        }
+      },
+      "required": ["displayName", "createdAt"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "News feed post",
+      "type": "object",
+      "properties": {
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Auth UID of post creator"
+        },
+        "authorName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of author"
+        },
+        "authorPic": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Profile picture URL of author"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "Post text content"
+        },
+        "mediaUrl": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Optional image URL for the post"
+        },
+        "likesCount": {
+          "type": "number",
+          "description": "Number of likes received"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["authorId", "authorName", "content", "likesCount", "createdAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "Comment on a post",
+      "type": "object",
+      "properties": {
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Auth UID of commenter"
+        },
+        "authorName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of commenter"
+        },
+        "authorPic": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Avatar of commenter"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "Comment content text"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["authorId", "authorName", "content", "createdAt"]
+    },
+    "Like": {
+      "title": "Like",
+      "description": "Like record by user on a post",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the liking user"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["userId", "createdAt"]
+    },
+    "Friend": {
+      "title": "Friend",
+      "description": "Friend connection in user subcollection",
+      "type": "object",
+      "properties": {
+        "friendId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the friend"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Display name of the friend"
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Avatar URL of the friend"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted"],
+          "description": "Status of the friendship connection"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when friendship was initiated or established"
+        }
+      },
+      "required": ["friendId", "displayName", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles"
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "#/entities/Post" },
+      "description": "Stores news feed posts"
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Nested collection for post comments"
+    },
+    "/posts/{postId}/likes/{userId}": {
+      "schema": { "$ref": "#/entities/Like" },
+      "description": "Subcollection tracking who liked the post"
+    },
+    "/users/{userId}/friends/{friendId}": {
+      "schema": { "$ref": "#/entities/Friend" },
+      "description": "Subcollection for user connections and friendships"
+    }
+  }
+}
